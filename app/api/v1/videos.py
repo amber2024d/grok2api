@@ -59,9 +59,17 @@ async def generate_video(request: VideoGenerationRequest, _: Optional[str] = Dep
 
         # 调试：打印result的结构
         logger.info(f"[Video] 收到Grok响应，类型: {type(result)}")
-        if isinstance(result, dict):
-            logger.info(f"[Video] 响应keys: {list(result.keys())}")
-            logger.info(f"[Video] 完整响应: {result}")
+
+        # 如果是Pydantic对象，转换为字典以便查看
+        from pydantic import BaseModel
+        result_dict = result.model_dump() if isinstance(result, BaseModel) else result
+
+        if isinstance(result_dict, dict):
+            logger.info(f"[Video] 响应keys: {list(result_dict.keys())}")
+            # 只打印部分关键信息，避免日志过长
+            if "choices" in result_dict and len(result_dict["choices"]) > 0:
+                content = result_dict["choices"][0].get("message", {}).get("content", "")
+                logger.info(f"[Video] content长度: {len(content)}, 前200字符: {content[:200]}")
 
         # 提取视频URL
         video_url = extract_video_url(result)
@@ -120,11 +128,11 @@ async def generate_video(request: VideoGenerationRequest, _: Optional[str] = Dep
         )
 
 
-def extract_video_url(result: dict) -> Optional[str]:
+def extract_video_url(result) -> Optional[str]:
     """从Grok响应中提取视频URL
 
     Args:
-        result: Grok API的响应结果
+        result: Grok API的响应结果（可能是dict或Pydantic对象）
 
     Returns:
         视频URL，如果未找到则返回None
@@ -132,6 +140,12 @@ def extract_video_url(result: dict) -> Optional[str]:
     logger.info(f"[Video] extract_video_url 被调用，result类型: {type(result)}")
 
     try:
+        # 如果是Pydantic对象，转换为字典
+        from pydantic import BaseModel
+        if isinstance(result, BaseModel):
+            logger.info("[Video] 检测到Pydantic对象，转换为字典")
+            result = result.model_dump()
+
         # 从choices中提取消息内容
         if "choices" in result and len(result["choices"]) > 0:
             choice = result["choices"][0]
@@ -140,7 +154,6 @@ def extract_video_url(result: dict) -> Optional[str]:
 
             logger.info(f"[Video] 提取视频URL - content长度: {len(content)}")
             logger.info(f"[Video] 提取视频URL - content前500字符: {content[:500]}")
-            logger.debug(f"[Video] 提取视频URL - 完整content: {content}")
 
             # 查找视频URL - 支持多种URL格式
             # 使用正则表达式提取URL，按优先级排序
