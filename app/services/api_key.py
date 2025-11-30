@@ -222,41 +222,45 @@ class APIKeyManager:
         Returns:
             tuple[bool, str]: (是否验证成功, 错误消息)
         """
-        # 检查 key 是否存在
-        if key not in self.api_keys:
-            return False, "API Key 不存在"
+        try:
+            # 检查 key 是否存在
+            if key not in self.api_keys:
+                return False, "API Key 不存在"
 
-        api_key_info = self.api_keys[key]
+            api_key_info = self.api_keys[key]
 
-        # 检查状态
-        if api_key_info.status == "disabled":
-            return False, "API Key 已被禁用"
+            # 检查状态
+            if api_key_info.status == "disabled":
+                return False, "API Key 已被禁用"
 
-        if api_key_info.status == "expired":
-            return False, "API Key 已过期"
-
-        # 检查过期时间
-        if api_key_info.expire_time is not None:
-            current_time = int(datetime.now().timestamp() * 1000)
-            if current_time > api_key_info.expire_time:
-                # 自动标记为过期
-                api_key_info.status = "expired"
-                # 标记数据需要保存
-                self._schedule_save()
+            if api_key_info.status == "expired":
                 return False, "API Key 已过期"
 
-        # 检查 IP 白名单
-        if api_key_info.ip_whitelist and client_ip:
-            if not self._check_ip_whitelist(client_ip, api_key_info.ip_whitelist):
-                logger.warning(f"[APIKey] IP 不在白名单: {client_ip}, Key: {key[:20]}...")
-                return False, f"客户端 IP {client_ip} 不在白名单中"
+            # 检查过期时间
+            if api_key_info.expire_time is not None:
+                current_time = int(datetime.now().timestamp() * 1000)
+                if current_time > api_key_info.expire_time:
+                    # 自动标记为过期
+                    api_key_info.status = "expired"
+                    # 标记数据需要保存
+                    self._schedule_save()
+                    return False, "API Key 已过期"
 
-        # 更新最后使用时间
-        api_key_info.last_used_time = int(datetime.now().timestamp() * 1000)
-        # 标记数据需要保存
-        self._schedule_save()
+            # 检查 IP 白名单
+            if api_key_info.ip_whitelist and client_ip:
+                if not self._check_ip_whitelist(client_ip, api_key_info.ip_whitelist):
+                    logger.warning(f"[APIKey] IP 不在白名单: {client_ip}, Key: {key[:20]}...")
+                    return False, f"客户端 IP {client_ip} 不在白名单中"
 
-        return True, ""
+            # 更新最后使用时间
+            api_key_info.last_used_time = int(datetime.now().timestamp() * 1000)
+            # 标记数据需要保存
+            self._schedule_save()
+
+            return True, ""
+        except Exception as e:
+            logger.error(f"[APIKey] 验证 API Key 时发生异常: {e}", exc_info=True)
+            return False, "服务器内部错误"
 
     @staticmethod
     def _check_ip_whitelist(client_ip: str, whitelist: List[str]) -> bool:

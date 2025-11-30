@@ -60,25 +60,34 @@ class AuthManager:
         if api_key_manager.api_keys:
             # 使用新的多 API Key 验证
             if not credentials:
+                logger.warning("[Auth] 使用多 API Key 系统，但未提供认证令牌")
                 raise HTTPException(
                     status_code=401,
                     detail=_build_error("缺少认证令牌", "missing_token")
                 )
 
             # 验证 API Key
-            is_valid, error_msg = api_key_manager.verify_api_key(credentials.credentials, client_ip)
-            if not is_valid:
+            try:
+                is_valid, error_msg = api_key_manager.verify_api_key(credentials.credentials, client_ip)
+                if not is_valid:
+                    logger.warning(f"[Auth] API Key 验证失败: {error_msg}")
+                    raise HTTPException(
+                        status_code=401,
+                        detail=_build_error(error_msg, "invalid_token")
+                    )
+
+                logger.debug(f"[Auth] API Key 认证成功: {credentials.credentials[:20]}...")
+                return credentials.credentials
+            except HTTPException:
+                # 重新抛出 HTTPException
+                raise
+            except Exception as e:
+                # 捕获其他异常，记录日志并返回 500 错误
+                logger.error(f"[Auth] API Key 验证过程中发生异常: {e}", exc_info=True)
                 raise HTTPException(
-                    status_code=401,
-                    detail=_build_error(error_msg, "invalid_token")
+                    status_code=500,
+                    detail=_build_error("服务器内部错误", "internal_error")
                 )
-
-            # 保存 dirty 数据（如果有更新）
-            import asyncio
-            asyncio.create_task(api_key_manager.save_if_dirty())
-
-            logger.debug(f"[Auth] API Key 认证成功: {credentials.credentials[:20]}...")
-            return credentials.credentials
 
         # 回退到旧的单 API Key 验证（向后兼容）
         api_key = setting.grok_config.get("api_key")
