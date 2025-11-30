@@ -57,6 +57,12 @@ async def generate_video(request: VideoGenerationRequest, _: Optional[str] = Dep
         # 调用Grok客户端生成视频
         result = await GrokClient.openai_to_grok(openai_request)
 
+        # 调试：打印result的结构
+        logger.info(f"[Video] 收到Grok响应，类型: {type(result)}")
+        if isinstance(result, dict):
+            logger.info(f"[Video] 响应keys: {list(result.keys())}")
+            logger.info(f"[Video] 完整响应: {result}")
+
         # 提取视频URL
         video_url = extract_video_url(result)
 
@@ -123,6 +129,8 @@ def extract_video_url(result: dict) -> Optional[str]:
     Returns:
         视频URL，如果未找到则返回None
     """
+    logger.info(f"[Video] extract_video_url 被调用，result类型: {type(result)}")
+
     try:
         # 从choices中提取消息内容
         if "choices" in result and len(result["choices"]) > 0:
@@ -130,7 +138,9 @@ def extract_video_url(result: dict) -> Optional[str]:
             message = choice.get("message", {})
             content = message.get("content", "")
 
-            logger.debug(f"[Video] 提取视频URL - content: {content[:200]}...")
+            logger.info(f"[Video] 提取视频URL - content长度: {len(content)}")
+            logger.info(f"[Video] 提取视频URL - content前500字符: {content[:500]}")
+            logger.debug(f"[Video] 提取视频URL - 完整content: {content}")
 
             # 查找视频URL - 支持多种URL格式
             # 使用正则表达式提取URL，按优先级排序
